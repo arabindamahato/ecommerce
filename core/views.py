@@ -1,24 +1,45 @@
-from django.shortcuts import render
-from core.models import Item
-
-
-def home(request):
-    context = {
-        'items': Item.objects.all(),
-    }
-    return render(request, "home.html", context)
+from django.shortcuts import render, get_object_or_404
+from django.shortcuts import redirect
+from django.utils import timezone
+from django.views.generic import ListView, DetailView
+from core.models import Item, OrderItem, Order
 
 
 def checkout(request):
     return render(request, "checkout.html")
 
 
-def products(request):
-    context = {
-        'items': Item.objects.all(),
-    }
-    return render(request, "products.html", context)
-
-
 def base(request):
     return render(request, "base.html")
+
+
+class HomeView(ListView):
+    model = Item
+    template_name = "home.html"
+
+
+class ItemDetailView(DetailView):
+    model = Item
+    template_name = "product.html"
+
+
+def add_to_cart(request, slug):
+    item = get_object_or_404(Item, slug=slug)
+    order_item = OrderItem.objects.create(item=item)
+    order_qs = Order.objects.filter(user=request.user, is_ordered=False)
+    if order_qs.exists():
+        order = order_qs[0]
+        # check the order item is in the order
+        if order.items.filter(item__slug=item.slug).exists():
+            order_item.quantity += 1
+            order_item.save()
+    else:
+        ordered_date = timezone.now()
+        order = Order.objects.create(
+            user=request.user, ordered_date=ordered_date)
+        order.items.add(order_item)
+    return redirect("core:product", kwargs={
+        'slug': slug
+    })
+
+    # here "core:product" = product is url name core is appname with slug
